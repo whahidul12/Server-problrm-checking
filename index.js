@@ -282,5 +282,9 @@ app.post("/artwork/:id/like", async (req, res) => {
     }
 });
 
+app.listen(port, () => {
+    console.log(`app is running on http://localhost:${port}/`);
+})
+
 // IMPORTANT FOR VERCEL
 module.exports = app;
