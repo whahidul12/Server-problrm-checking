@@ -164,6 +164,25 @@ app.get("/top-artists", async (req, res) => {
     }
 });
 
+app.patch("/users/:email", async (req, res) => {
+    const db = await connectDB();
+    const arts_users = db.collection("arts_users");
+    const { email } = req.params;
+    const updateData = req.body;
+    delete updateData.email;
+    delete updateData._id;
+
+    try {
+        const result = await arts_users.updateOne(
+            { email: email },
+            { $set: updateData }
+        );
+        res.send(result);
+    } catch (error) {
+        res.status(500).send({ message: "Update failed", error });
+    }
+});
+
 app.get("/community-stats", async (req, res) => {
     const db = await connectDB();
     const arts_collections = db.collection("arts_collections");
