@@ -131,6 +131,66 @@ app.get("/artwork/limit", async (req, res) => {
     res.send(arts);
 });
 
+app.get("/top-artists", async (req, res) => {
+    const db = await connectDB();
+    const arts_collections = db.collection("arts_collections");
+
+    try {
+        const topArtists = await arts_collections.aggregate([
+            {
+                // Optional: 
+                // $match: { createdAt: { $gte: new Date(new Date().setMonth(new Date().getMonth() - 3)) } }
+                $match: { visibility: "Public" }
+            },
+            {
+                $group: {
+                    _id: "$artistEmail",
+                    artistName: { $first: "$artistName" },
+                    artistPhoto: { $first: "$artistPhoto" },
+                    totalLikes: { $sum: { $ifNull: ["$likes", 0] } },
+                    totalArtworks: { $count: {} }
+                }
+            },
+            {
+                $sort: { totalLikes: -1, totalArtworks: -1 }
+            },
+            { $limit: 3 }
+        ]).toArray();
+
+        res.send(topArtists);
+    } catch (error) {
+        console.error("Error fetching top artists:", error);
+        res.status(500).send({ message: "Failed to fetch top artists" });
+    }
+});
+
+app.get("/community-stats", async (req, res) => {
+    const db = await connectDB();
+    const arts_collections = db.collection("arts_collections");
+    const arts_users = db.collection("arts_users");
+
+    try {
+
+        const totalArtworks = await arts_collections.countDocuments({ visibility: "Public" });
+        const totalArtists = await arts_users.countDocuments();
+        const likesData = await arts_collections.aggregate([
+            { $group: { _id: null, totalLikes: { $sum: { $ifNull: ["$likes", 0] } } } }
+        ]).toArray();
+        const totalLikes = likesData[0]?.totalLikes || 0;
+        const avgRating = "4.9";
+
+        res.send({
+            artworks: totalArtworks.toLocaleString() + "+",
+            artists: totalArtists.toLocaleString() + "+",
+            likes: totalLikes > 1000 ? (totalLikes / 1000).toFixed(1) + "K+" : totalLikes + "+",
+            rating: avgRating + "/5"
+        });
+    } catch (error) {
+        console.error("Error fetching stats:", error);
+        res.status(500).send({ message: "Failed to fetch stats" });
+    }
+});
+
 app.get("/artwork/:id", async (req, res) => {
     const db = await connectDB();
     const arts_collections = db.collection("arts_collections");
@@ -162,10 +222,7 @@ app.put("/artwork/:id", async (req, res) => {
     const updatedArt = req.body;
     console.log("Incoming update for ID:", id);
     console.log("Data received:", updatedArt);
-
-    //jibon bara gese amar eta korte jaye
     delete updatedArt._id;
-    //jibon bara gese amar eta korte jaye
 
     const filter = { _id: new ObjectId(id) };
     const updateDoc = {
