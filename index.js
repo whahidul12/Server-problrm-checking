@@ -62,11 +62,62 @@ app.get("/artwork", async (req, res) => {
     const db = await connectDB();
     const arts_collections = db.collection("arts_collections");
 
-    const query = { visibility: "Public" }
-    const cursor = arts_collections.find(query).sort({ createdAt: -1 });
-    const arts = await cursor.toArray();
-    if (!arts) return res.status(404).send({ message: "arts not found" });
-    res.send(arts);
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 8;
+        const skip = (page - 1) * limit;
+        const { search, category, sort } = req.query;
+        let query = { visibility: "Public" };
+
+        if (category && category !== "All") {
+            query.category = category;
+        }
+
+        if (search) {
+            query.$or = [
+                { title: { $regex: search, $options: "i" } },
+                { artistName: { $regex: search, $options: "i" } }
+            ];
+        }
+
+        let sortOptions = { createdAt: -1 };
+
+        switch (sort) {
+            case "oldest":
+                sortOptions = { createdAt: 1 };
+                break;
+            case "price_asc":
+                sortOptions = { price: 1 };
+                break;
+            case "price_desc":
+                sortOptions = { price: -1 };
+                break;
+            case "likes":
+                sortOptions = { likes: -1 };
+                break;
+            default:
+                sortOptions = { createdAt: -1 };
+        }
+
+        const totalDocs = await arts_collections.countDocuments(query);
+        const result = await arts_collections
+            .find(query)
+            .sort(sortOptions)
+            .skip(skip)
+            .limit(limit)
+            .toArray();
+
+        res.send({
+            artworks: result,
+            totalDocs,
+            totalPages: Math.ceil(totalDocs / limit),
+            currentPage: page
+        });
+
+    } catch (error) {
+        console.error("Error fetching artworks:", error);
+        res.status(500).send({ message: "Error fetching artworks" });
+    }
 });
 
 app.get("/artwork/limit", async (req, res) => {
@@ -74,7 +125,7 @@ app.get("/artwork/limit", async (req, res) => {
     const arts_collections = db.collection("arts_collections");
 
     const query = { visibility: "Public" }
-    const cursor = arts_collections.find(query).sort({ createdAt: -1 }).limit(6);
+    const cursor = arts_collections.find(query).sort({ createdAt: -1 }).limit(8);
     const arts = await cursor.toArray();
     if (!arts) return res.status(404).send({ message: "arts not found" });
     res.send(arts);
